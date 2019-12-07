@@ -39,9 +39,7 @@
 (defn $set
   [state addr mode value]
   (if (= 1 mode)
-    (throw (ex-info "invalid address type"
-                    {:sate state :addr addr
-                     :mode mode :value value}))
+    (assoc state (get state addr) value)
     (assoc state addr value)))
 
 
@@ -74,7 +72,7 @@
   [state nil])
 
 
-
+;; sum
 (defmethod eval-instruction 1
   [[state pp :as arg]]
   (let [[{:keys [op p1 p2 p3]} a b c] (instruction arg 4)]
@@ -84,7 +82,7 @@
      (+ 4 pp)]))
 
 
-
+;; multiplication
 (defmethod eval-instruction 2
   [[state pp :as arg]]
   (let [[{:keys [op p1 p2 p3]} a b c] (instruction arg 4)]
@@ -94,7 +92,7 @@
      (+ 4 pp)]))
 
 
-
+;; read-input
 (defmethod eval-instruction 3
   [[state pp :as arg]]
   (let [[{:keys [op p1]} a] (instruction arg 2)]
@@ -103,7 +101,7 @@
       [($set state a p1 v) (+ 2 pp)])))
 
 
-
+;; output
 (defmethod eval-instruction 4
   [[state pp :as arg]]
   (let [[{:keys [op p1]} a] (instruction arg 2)]
