@@ -110,7 +110,8 @@
   (->> program
      (parse)
      (machine-eval)
-     ffirst))
+     :state
+     first))
 ;;=> 3931283
 
 
@@ -177,7 +178,8 @@
        (assoc 1 noun)
        (assoc 2 verb)
        (machine-eval)
-       ffirst)
+       :state
+       first)
     noun verb])
  (filter #(= 19690720 (first %)))
  first)
