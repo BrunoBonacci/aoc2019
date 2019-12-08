@@ -215,3 +215,16 @@
 ;; suite only outputs one number, the diagnostic code.
 ;;
 ;; What is the diagnostic code for system ID 5?
+
+
+
+(fact
+ "solving: What is the diagnostic code for system ID 5?"
+
+ (->> (machine-eval (parse program) [5])
+    :output
+    last)
+ => 14195011
+ ;;
+
+ )

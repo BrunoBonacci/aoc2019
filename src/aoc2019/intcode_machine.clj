@@ -107,8 +107,7 @@
  )
 
 
-;; read-input
-(defmethod eval-instruction 3
+(defmethod eval-instruction 3 ;; read-input
   [{:keys [state pp input output] :as m}]
   (let [[{:keys [op pax]} ax] (instruction m 2)]
     (-> m
@@ -124,8 +123,8 @@
  (eval-instruction {:state [103 3 99 0] :pp 0 :input [9]}) => (contains {:state [9 3 99 0] :pp 2 :input []})
  )
 
-;; output
-(defmethod eval-instruction 4
+
+(defmethod eval-instruction 4 ;; output
   [{:keys [state pp input output] :as m}]
   (let [[{:keys [op pax]} ax] (instruction m 2)]
     (-> m
@@ -133,40 +132,92 @@
        (update :output conj ($get state ax pax)))))
 
 
-(comment
+(fact
+ "verifying output handling"
 
-  ;; jump-if-true
-  (defmethod eval-instruction 5
-    [{:keys [state pp input output] :as m}]
-    (let [[{:keys [op p1 p2]} a b] (instruction m 3)
-          condition (not= 0 a)]
-      [state (if condition b (+ 3 pp))]))
+ (eval-instruction {:state [4 2 99] :pp 0 :output []}) => (contains {:state [4 2 99] :pp 2 :output [99]})
+ (eval-instruction {:state [104 2 99] :pp 0 :output []}) => (contains {:state [104 2 99] :pp 2 :output [2]})
+ )
 
 
-  ;; jump-if-false
-  (defmethod eval-instruction 6
-    [{:keys [state pp input output] :as m}]
-    (let [[{:keys [op p1 p2]} a b] (instruction m 3)
-          condition (= 0 a)]
-      [state (if condition b (+ 3 pp))]))
 
 
-  ;; less-than
-  (defmethod eval-instruction 7
-    [{:keys [state pp input output] :as m}]
-    (let [[{:keys [op p1 p2 p3]} a b c] (instruction m 4)
-          condition (< ($get state a p1) ($get state b p1))]
-      [($set state c p3 (if condition 1 0))
-       (+ 4 pp)]))
+(defmethod eval-instruction 5 ;; jump-if-true
+  [{:keys [state pp input output] :as m}]
+  (let [[{:keys [op pax pbx pcx]} ax bx] (instruction m 3)
+        condition (not= 0 ($get state ax pax))]
+    (if condition
+      (assoc  m :pp ($get state bx pbx))
+      (update m :pp + 3))))
 
 
-  ;; equals
-  (defmethod eval-instruction 8
-    [{:keys [state pp input output] :as m}]
-    (let [[{:keys [op p1 p2 p3]} a b c] (instruction m 4)
-          condition (= ($get state a p1) ($get state b p1))]
-      [($set state c p3 (if condition 1 0))
-       (+ 4 pp)])))
+(fact
+ "verifying jump-if-true handling"
+
+ (eval-instruction {:state [5 4 4 99 5 99] :pp 0})   => (contains {:state [5 4 4 99 5 99], :pp 5})
+ (eval-instruction {:state [5 4 4 99 0] :pp 0})      => (contains {:state [5 4 4 99 0], :pp 3})
+ (eval-instruction {:state [1105 1 4 99 99] :pp 0 }) => (contains {:state [1105 1 4 99 99] :pp 4 })
+ (eval-instruction {:state [1105 0 4 99 99] :pp 0 }) => (contains {:state [1105 0 4 99 99] :pp 3 })
+ )
+
+
+(defmethod eval-instruction 6 ;; jump-if-false
+  [{:keys [state pp input output] :as m}]
+  (let [[{:keys [op pax pbx pcx]} ax bx] (instruction m 3)
+        condition (= 0 ($get state ax pax))]
+    (if condition
+      (assoc  m :pp ($get state bx pbx))
+      (update m :pp + 3))))
+
+
+(fact
+ "verifying jump-if-false handling"
+
+ (eval-instruction {:state [6 4 5 99 0 6 99] :pp 0}) => (contains {:state [6 4 5 99 0 6 99], :pp 6})
+ (eval-instruction {:state [6 4 4 99 1] :pp 0})      => (contains {:state [6 4 4 99 1], :pp 3})
+ (eval-instruction {:state [1106 0 4 99 99] :pp 0 }) => (contains {:state [1106 0 4 99 99], :pp 4})
+ (eval-instruction {:state [1106 1 4 99 99] :pp 0 }) => (contains {:state [1106 1 4 99 99], :pp 3})
+ )
+
+
+(defmethod eval-instruction 7 ;; less-than
+  [{:keys [state pp input output] :as m}]
+  (let [[{:keys [op pax pbx pcx]} ax bx cx] (instruction m 4)
+        condition (< ($get state ax pax) ($get state bx pbx))]
+    (-> m
+       (update :pp + 4)
+       (update :state $set cx pcx (if condition 1 0)))))
+
+
+(fact
+ "verifying less-than handling"
+
+ (eval-instruction {:state [7 5 6 7 99 1 2 -1] :pp 0})    => (contains {:state [7 5 6 7 99 1 2 1], :pp 4})
+ (eval-instruction {:state [7 6 5 7 99 1 2 -1] :pp 0})    => (contains {:state [7 6 5 7 99 1 2 0], :pp 4})
+ (eval-instruction {:state [1107 5 6 7 99 1 2 -1] :pp 0}) => (contains {:state [1107 5 6 7 99 1 2 1], :pp 4})
+ (eval-instruction {:state [1107 6 5 7 99 1 2 -1] :pp 0}) => (contains {:state [1107 6 5 7 99 1 2 0], :pp 4})
+ )
+
+
+
+
+(defmethod eval-instruction 8 ;; equals
+  [{:keys [state pp input output] :as m}]
+  (let [[{:keys [op pax pbx pcx]} ax bx cx] (instruction m 4)
+        condition (= ($get state ax pax) ($get state bx pbx))]
+    (-> m
+       (update :pp + 4)
+       (update :state $set cx pcx (if condition 1 0)))))
+
+
+(fact
+ "verifying equal handling"
+
+ (eval-instruction {:state [8 5 6 7 99 1 1 -1] :pp 0})    => (contains {:state [8 5 6 7 99 1 1 1], :pp 4})
+ (eval-instruction {:state [8 6 5 7 99 1 2 -1] :pp 0})    => (contains {:state [8 6 5 7 99 1 2 0], :pp 4})
+ (eval-instruction {:state [1108 5 5 7 99 1 2 -1] :pp 0}) => (contains {:state [1108 5 5 7 99 1 2 1], :pp 4})
+ (eval-instruction {:state [1108 6 5 7 99 1 2 -1] :pp 0}) => (contains {:state [1108 6 5 7 99 1 2 0], :pp 4})
+ )
 
 
 
@@ -251,30 +302,61 @@
 
 
 
-#_(fact
+(fact
  "testing compartors positional"
 
  (:state (machine-eval (parse "8,5,6,0,99,9,9")))
  => [1 5 6 0 99 9 9]
 
 
- (first (machine-eval (parse "8,5,6,0,99,8,9")))
+ (:state (machine-eval (parse "8,5,6,0,99,8,9")))
  => [0 5 6 0 99 8 9]
 
 
- (first (machine-eval (parse "10008,3,2,1,99")))
+ (:state (machine-eval (parse "10008,3,2,1,99")))
  => [10008 3 2 0 99]
 
 
- (first (machine-eval (parse "7,5,6,0,99,8,9")))
+ (:state (machine-eval (parse "7,5,6,0,99,8,9")))
  => [1 5 6 0 99 8 9]
 
 
- (first (machine-eval (parse "7,5,6,0,99,9,9")))
+ (:state (machine-eval (parse "7,5,6,0,99,9,9")))
  => [0 5 6 0 99 9 9]
 
 
- (first (machine-eval (parse "10007,2,3,1,99")))
+ (:state (machine-eval (parse "10007,2,3,1,99")))
  => [10007 2 0 1 99]
+
+ )
+
+
+(fact
+ "test jumps from day 05"
+
+ ;; input equal to 8 (position mode)
+ (:output (machine-eval (parse "3,9,8,9,10,9,4,9,99,-1,8") [8])) => [1]
+ (:output (machine-eval (parse "3,9,8,9,10,9,4,9,99,-1,8") [7])) => [0]
+
+ ;; input less than 8 (position mode)
+ (:output (machine-eval (parse "3,9,7,9,10,9,4,9,99,-1,8") [8])) => [0]
+ (:output (machine-eval (parse "3,9,7,9,10,9,4,9,99,-1,8") [7])) => [1]
+
+
+ ;; input equal to 8 (immediate mode)
+ (:output (machine-eval (parse "3,3,1108,-1,8,3,4,3,99") [8])) => [1]
+ (:output (machine-eval (parse "3,3,1108,-1,8,3,4,3,99") [7])) => [0]
+
+ ;; input less than 8 (immediate mode)
+ (:output (machine-eval (parse "3,3,1107,-1,8,3,4,3,99") [8])) => [0]
+ (:output (machine-eval (parse "3,3,1107,-1,8,3,4,3,99") [7])) => [1]
+
+
+
+ ;; whether the input is zero or non zero
+ (:output (machine-eval (parse "3,12,6,12,15,1,13,14,13,4,13,99,-1,0,1,9") [0])) => [0]
+ (:output (machine-eval (parse "3,12,6,12,15,1,13,14,13,4,13,99,-1,0,1,9") [8])) => [1]
+ (:output (machine-eval (parse "3,3,1105,-1,9,1101,0,0,12,4,12,99,1") [0])) => [0]
+ (:output (machine-eval (parse "3,3,1105,-1,9,1101,0,0,12,4,12,99,1") [8])) => [1]
 
  )
