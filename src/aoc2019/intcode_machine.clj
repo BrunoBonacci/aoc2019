@@ -112,7 +112,7 @@
   (let [[{:keys [op pax]} ax] (instruction m 2)]
     (-> m
        (update :pp + 2)
-       (update :state $set ax pax (first input))
+       (update :state $set ax pax (or (first input) (throw (ex-info "Reached End Of Inputs (EOI)." m))))
        (update :input rest))))
 
 
@@ -223,7 +223,7 @@
 
 (defmethod eval-instruction 99
   [{:keys [state pp input output] :as m}]
-  [state :terminated])
+  (assoc m :pp :terminated))
 
 
 
@@ -241,7 +241,7 @@
  )
 
 
-(defn ended?
+(defn running?
   [{:keys [pp]}]
   (not (nil? pp)))
 
@@ -249,12 +249,12 @@
 
 (defn machine-eval
   ([p]
-   (->> (iterate eval-instruction {:state p :pp 0})
-      (take-while ended?)
+   (->> (iterate eval-instruction {:state p :pp 0 :input [] :output []})
+      (take-while running?)
       last))
   ([p input]
    (->> (iterate eval-instruction {:state p :pp 0 :input input :output []})
-      (take-while ended?)
+      (take-while running?)
       last)))
 
 
