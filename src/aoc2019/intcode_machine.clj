@@ -23,23 +23,40 @@
  (opcode 99)  => {:op 99,  :pax 0, :pbx 0, :pcx 0}
  (opcode 1002) => {:op 2,  :pax 0, :pbx 1, :pcx 0}
  (opcode 11101) => {:op 1, :pax 1, :pbx 1, :pcx 1}
+ (opcode 1202) => {:op 2,  :pax 2, :pbx 1, :pcx 0}
 
  )
 
 
 (defn $get
-  [state addr mode]
-  (if (= 1 mode)
-    addr
-    (get state addr)))
+  [{:keys [base state] :or {base 0} :as m} addr mode]
+  (case mode
+    0 (get state addr 0)
+    2 (get state (+ base addr) 0)
+    1 addr))
 
+
+
+(defn- expand
+  [v addr]
+  (let [s (count v)]
+    (if (< s (inc addr))
+      (into v (repeat (- (inc addr) s) 0))
+      v)))
+
+
+
+(defn assoc-safe
+  [v i o]
+  (assoc (expand v i) i o))
 
 
 (defn $set
-  [state addr mode value]
-  (if (= 1 mode)
-    (assoc state (get state addr) value)
-    (assoc state addr value)))
+  [{:keys [base state] :or {base 0} :as m} addr mode value]
+  (case mode
+    0 (update m :state assoc-safe addr value)
+    2 (update m :state assoc-safe (+ base addr) value)
+    1 (update m :state assoc-safe (get state addr) value)))
 
 
 
@@ -78,7 +95,7 @@
   (let [[{:keys [op pax pbx pcx]} ax bx cx] (instruction m 4)]
     (-> m
        (update :pp + 4)
-       (update :state $set cx pcx (+' ($get state ax pax) ($get state bx pbx))))))
+       ($set cx pcx (+' ($get m ax pax) ($get m bx pbx))))))
 
 
 
@@ -96,7 +113,7 @@
   (let [[{:keys [op pax pbx pcx]} ax bx cx] (instruction m 4)]
     (-> m
        (update :pp + 4)
-       (update :state $set cx pcx (*' ($get state ax pax) ($get state bx pbx))))))
+       ($set cx pcx (*' ($get m ax pax) ($get m bx pbx))))))
 
 
 (fact
@@ -112,7 +129,7 @@
   (let [[{:keys [op pax]} ax] (instruction m 2)]
     (-> m
        (update :pp + 2)
-       (update :state $set ax pax (or (first input) (throw (ex-info "Reached End Of Inputs (EOI)." m))))
+       ($set ax pax (or (first input) (throw (ex-info "Reached End Of Inputs (EOI)." m))))
        (update :input rest))))
 
 
@@ -129,7 +146,7 @@
   (let [[{:keys [op pax]} ax] (instruction m 2)]
     (-> m
        (update :pp + 2)
-       (update :output conj ($get state ax pax)))))
+       (update :output conj ($get m ax pax)))))
 
 
 (fact
@@ -145,9 +162,9 @@
 (defmethod eval-instruction 5 ;; jump-if-true
   [{:keys [state pp input output] :as m}]
   (let [[{:keys [op pax pbx pcx]} ax bx] (instruction m 3)
-        condition (not= 0 ($get state ax pax))]
+        condition (not= 0 ($get m ax pax))]
     (if condition
-      (assoc  m :pp ($get state bx pbx))
+      (assoc  m :pp ($get m bx pbx))
       (update m :pp + 3))))
 
 
@@ -164,9 +181,9 @@
 (defmethod eval-instruction 6 ;; jump-if-false
   [{:keys [state pp input output] :as m}]
   (let [[{:keys [op pax pbx pcx]} ax bx] (instruction m 3)
-        condition (= 0 ($get state ax pax))]
+        condition (= 0 ($get m ax pax))]
     (if condition
-      (assoc  m :pp ($get state bx pbx))
+      (assoc  m :pp ($get m bx pbx))
       (update m :pp + 3))))
 
 
@@ -183,10 +200,10 @@
 (defmethod eval-instruction 7 ;; less-than
   [{:keys [state pp input output] :as m}]
   (let [[{:keys [op pax pbx pcx]} ax bx cx] (instruction m 4)
-        condition (< ($get state ax pax) ($get state bx pbx))]
+        condition (< ($get m ax pax) ($get m bx pbx))]
     (-> m
        (update :pp + 4)
-       (update :state $set cx pcx (if condition 1 0)))))
+       ($set cx pcx (if condition 1 0)))))
 
 
 (fact
@@ -204,10 +221,10 @@
 (defmethod eval-instruction 8 ;; equals
   [{:keys [state pp input output] :as m}]
   (let [[{:keys [op pax pbx pcx]} ax bx cx] (instruction m 4)
-        condition (= ($get state ax pax) ($get state bx pbx))]
+        condition (= ($get m ax pax) ($get m bx pbx))]
     (-> m
        (update :pp + 4)
-       (update :state $set cx pcx (if condition 1 0)))))
+       ($set cx pcx (if condition 1 0)))))
 
 
 (fact
@@ -219,6 +236,26 @@
  (eval-instruction {:state [1108 6 5 7 99 1 2 -1] :pp 0}) => (contains {:state [1108 6 5 7 99 1 2 0], :pp 4})
  )
 
+
+
+(defmethod eval-instruction 9 ;; rel-base-change
+  [{:keys [state pp input output base] :as m}]
+  (let [[{:keys [op pax]} ax] (instruction m 2)]
+    (-> m
+       (update :pp + 2)
+       (update :base (fnil + 0) ($get m ax pax)))))
+
+
+(fact
+ "verifying rel-base"
+
+ (eval-instruction {:state [109 3 2201 2 3 0 99] :pp 0})
+ => (contains {:state [109 3 2201 2 3 0 99], :pp 2, :base 3})
+
+ (-> {:state [109 3 2201 2 3 0 99] :pp 0}
+    eval-instruction
+    eval-instruction) => (contains {:state [99 3 2201 2 3 0 99], :pp 6, :base 3})
+ )
 
 
 (defmethod eval-instruction 99

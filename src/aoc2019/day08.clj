@@ -150,8 +150,8 @@
  )
 
 
-
-(println (decode image [25 6])) ;; BCPZB
+(comment
+  (println (decode image [25 6]))) ;; BCPZB
 
 ;; 1110001100111001111011100
 ;; 1001010010100100001010010
