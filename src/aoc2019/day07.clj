@@ -185,5 +185,157 @@
  )
 
 
+;;
+;; --- Part Two ---
+;;
+;; It's no good - in this configuration, the amplifiers can't generate
+;; a large enough output signal to produce the thrust you'll need. The
+;; Elves quickly talk you through rewiring the amplifiers into a
+;; feedback loop:
+;;
+;; ```
+;;       O-------O  O-------O  O-------O  O-------O  O-------O
+;; 0 -+->| Amp A |->| Amp B |->| Amp C |->| Amp D |->| Amp E |-.
+;;    |  O-------O  O-------O  O-------O  O-------O  O-------O |
+;;    |                                                        |
+;;    '--------------------------------------------------------+
+;;                                                             |
+;;                                                             v
+;;                                                      (to thrusters)
+;; ```
+;;
+;; Most of the amplifiers are connected as they were before; amplifier
+;; A's output is connected to amplifier B's input, and so on. However,
+;; the output from amplifier E is now connected into amplifier A's
+;; input. This creates the feedback loop: the signal will be sent
+;; through the amplifiers many times.
+;;
+;; In feedback loop mode, the amplifiers need totally different phase
+;; settings: integers from 5 to 9, again each used exactly once. These
+;; settings will cause the Amplifier Controller Software to repeatedly
+;; take input and produce output many times before halting. Provide
+;; each amplifier its phase setting at its first input instruction;
+;; all further input/output instructions are for signals.
+;;
+;; Don't restart the Amplifier Controller Software on any amplifier
+;; during this process. Each one should continue receiving and sending
+;; signals until it halts.
+;;
+;; All signals sent or received in this process will be between pairs
+;; of amplifiers except the very first signal and the very last
+;; signal. To start the process, a 0 signal is sent to amplifier A's
+;; input exactly once.
+;;
+;; Eventually, the software on the amplifiers will halt after they
+;; have processed the final loop. When this happens, the last output
+;; signal from amplifier E is sent to the thrusters. Your job is to
+;; find the largest output signal that can be sent to the thrusters
+;; using the new phase settings and feedback loop arrangement.
+;;
+;; Here are some example programs:
+;;
+;;  - Max thruster signal 139629729 (from phase setting sequence 9,8,7,6,5):
+;;
+;; ```
+;; 3,26,1001,26,-4,26,3,27,1002,27,2,27,1,27,26,
+;; 27,4,27,1001,28,-1,28,1005,28,6,99,0,0,5
+;; ```
+;;
+;;   - Max thruster signal 18216 (from phase setting sequence 9,7,8,5,6):
+;;
+;; ```
+;; 3,52,1001,52,-5,52,3,53,1,52,56,54,1007,54,5,55,1005,55,26,1001,54,
+;; -5,54,1105,1,12,1,53,54,53,1008,54,0,55,1001,55,1,55,2,53,55,53,4,
+;; 53,1001,56,-1,56,1005,56,6,99,0,0,0,0,10
+;; ```
+;;
+;; Try every combination of the new phase settings on the amplifier
+;; feedback loop. What is the highest signal that can be sent to the
+;; thrusters?
+;;
+
+
+(defn async-amplifier
+  [prog in-chan out-chan]
+  (future
+    (->> (low-level-machine
+        {:state prog
+         :io-mode :async-queue
+         :input in-chan
+         :output out-chan})
+       (take-while running?)
+       last)))
+
+
+(defn feedback-circuit
+    [prog [a b c d e :as phases]]
+    (fn [signal]
+      (let [a2b (bqueue [b])
+            b2c (bqueue [c])
+            c2d (bqueue [d])
+            d2e (bqueue [e])
+            e2a (bqueue [a signal])]
+
+        (async-amplifier  prog e2a a2b)
+        (async-amplifier  prog a2b b2c)
+        (async-amplifier  prog b2c c2d)
+        (async-amplifier  prog c2d d2e)
+        @(async-amplifier prog d2e e2a)
+
+        ;; get the final result
+        (queue-take e2a))))
+
+
+
+(defn best-phase-settings2
+  [prog]
+  (->>
+   (combo/permutations [5 6 7 8 9])
+   (pmap (juxt identity #((feedback-circuit prog %) 0)))
+   (sort-by second >)
+   first))
+
+
+
+(fact
+ "testing feedback circuit (sample1)"
+
+ (let [prog (parse "3,26,1001,26,-4,26,3,27,1002,27,2,27,1,27,26,27,4,27,1001,28,-1,28,1005,28,6,99,0,0,5")
+       result (future ((feedback-circuit prog [9,8,7,6,5]) 0))]
+
+   (deref result 1500 nil) => 139629729
+
+   )
+
+ )
+
+
+
+
+(fact
+ "testing feedback circuit (sample2)"
+
+ (let [prog (parse "3,52,1001,52,-5,52,3,53,1,52,56,54,1007,54,5,55,1005,55,26,1001,54,-5,54,1105,1,12,1,53,54,53,1008,54,0,55,1001,55,1,55,2,53,55,53,4,53,1001,56,-1,56,1005,56,6,99,0,0,0,0,10")
+       result (future ((feedback-circuit prog [9,7,8,5,6]) 0))]
+
+   (deref result 1500 nil) => 18216
+   )
+
+ )
+
+
+
+
+(facts
+ "solution 2: What is the highest signal that can be sent to the thrusters?"
+
+ (second
+  (best-phase-settings2 amplifier-program))
+ => 27561242
+ )
+
+
+
+
 
 ;;

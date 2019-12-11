@@ -124,13 +124,39 @@
  )
 
 
+
+(defn bqueue
+  ([]
+   (java.util.concurrent.ArrayBlockingQueue. 1))
+  ([values]
+   (java.util.concurrent.ArrayBlockingQueue. (count values) false values)))
+
+
+
+(defn queue-take
+  [^java.util.concurrent.BlockingQueue input]
+  (.take input))
+
+
+
+(defn queue-put
+  [^java.util.concurrent.BlockingQueue output v]
+  (.put output v))
+
+
+
 (defmethod eval-instruction 3 ;; read-input
-  [{:keys [state pp input output] :as m}]
+  [{:keys [state pp input output io-mode] :as m}]
   (let [[{:keys [op pax]} ax] (instruction m 2)]
-    (-> m
-       (update :pp + 2)
-       ($set ax pax (or (first input) (throw (ex-info "Reached End Of Inputs (EOI)." m))))
-       (update :input rest))))
+    (if (= io-mode :async-queue)
+      (-> m
+         (update :pp + 2)
+         ($set ax pax (queue-take input)))
+      ;; direct
+      (-> m
+         (update :pp + 2)
+         ($set ax pax (or (first input) (throw (ex-info "Reached End Of Inputs (EOI)." m))))
+         (update :input rest)))))
 
 
 (fact
@@ -142,11 +168,15 @@
 
 
 (defmethod eval-instruction 4 ;; output
-  [{:keys [state pp input output] :as m}]
+  [{:keys [state pp input output io-mode] :as m}]
   (let [[{:keys [op pax]} ax] (instruction m 2)]
-    (-> m
-       (update :pp + 2)
-       (update :output conj ($get m ax pax)))))
+    (if (= io-mode :async-queue)
+      (-> m
+         (update :pp + 2)
+         ($set ax pax (queue-put output ($get m ax pax))))
+      (-> m
+         (update :pp + 2)
+         (update :output conj ($get m ax pax))))))
 
 
 (fact
@@ -284,13 +314,19 @@
 
 
 
+(defn low-level-machine
+  [{:keys [state pp input output io-mode] :as mx}]
+  (iterate eval-instruction
+           (merge {:pp 0, :io-mode :direct, :input [], :output []}
+                  mx)))
+
+
+
 (defn machine-eval
   ([p]
-   (->> (iterate eval-instruction {:state p :pp 0 :input [] :output []})
-      (take-while running?)
-      last))
+   (machine-eval p []))
   ([p input]
-   (->> (iterate eval-instruction {:state p :pp 0 :input input :output []})
+   (->> (low-level-machine {:state p :input input})
       (take-while running?)
       last)))
 
