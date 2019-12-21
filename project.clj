@@ -6,7 +6,9 @@
   :dependencies [[org.clojure/clojure "1.9.0"]
                  [midje "1.9.8"]
                  [aysylu/loom "1.0.2"]
-                 [org.clojure/math.combinatorics "0.1.6"]]
+                 [org.clojure/math.combinatorics "0.1.6"]
+                 [com.brunobonacci/where "0.5.5"]]
 
+  :main aoc2019.day13
   :profiles {:dev {:plugins [[lein-midje "3.2.1"]]}}
   )

@@ -322,11 +322,34 @@
 
 
 
+(defn step-through-until-breakpoint
+  [machine-state breakpoint?]
+  (loop [machine-state (merge {:pp 0, :io-mode :direct, :input [], :output []} machine-state)]
+    (let [machine-state' (eval-instruction machine-state)]
+      (if (or (not (running? machine-state'))
+             (breakpoint? machine-state'))
+        machine-state'
+        (recur machine-state')))))
+
+
+
+(defn before-input?
+  [{:keys [state pp]}]
+  (and (number? pp)
+   (= 3 (rem (get state pp) 10))))
+
+
+
 (defn machine-eval
   ([p]
    (machine-eval p []))
   ([p input]
    (->> (low-level-machine {:state p :input input})
+      (take-while running?)
+      last))
+  ([p input on-step]
+   (->> (low-level-machine {:state p :input input})
+      (map #(doto % on-step))
       (take-while running?)
       last)))
 

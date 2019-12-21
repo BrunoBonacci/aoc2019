@@ -1,7 +1,8 @@
 (ns aoc2019.day12
   (:require [clojure.string :as str]
             [clojure.math.combinatorics :as combo]
-            [midje.sweet :refer :all]))
+            [midje.sweet :refer :all]
+            [aoc2019.util :refer :all]))
 
 ;;
 ;; --- Day 12: The N-Body Problem ---
@@ -254,14 +255,6 @@
 <x=2, y=-10, z=-7>
 <x=4, y=-8, z=8>
 <x=3, y=5, z=-1>")
-
-
-(defn sign
-  [n]
-  (cond
-    (= 0 n) 0
-    (pos? n) +1
-    (neg? n) -1))
 
 
 
