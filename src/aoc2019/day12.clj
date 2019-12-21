@@ -265,15 +265,6 @@
 
 
 
-(for [a (parse test-input)
-    b (parse test-input)AA
-    :when (not= a b)]
-  (update a
-          :vx + (sign (- (get a :x) (get b :x)))
-          :vy + (sign (- (get a :y) (get b :y)))
-          :vz + (sign (- (get a :z) (get b :z)))))
-
-
 (defn attract
   [moons m]
   (->> (for [b moons :when (not= m b)]
@@ -361,6 +352,183 @@
 
  )
 
+;;
+;; --- Part Two ---
+;;
+;; All this drifting around in space makes you wonder about the nature
+;; of the universe. Does history really repeat itself? You're curious
+;; whether the moons will ever return to a previous state.
+;;
+;; Determine the number of steps that must occur before all of the
+;; moons' positions and velocities exactly match a previous point in
+;; time.
+;;
+;; For example, the first example above takes 2772 steps before they
+;; exactly match a previous point in time; it eventually returns to
+;; the initial state:
+;;
+;; ```
+;; After 0 steps:
+;; pos=<x= -1, y=  0, z=  2>, vel=<x=  0, y=  0, z=  0>
+;; pos=<x=  2, y=-10, z= -7>, vel=<x=  0, y=  0, z=  0>
+;; pos=<x=  4, y= -8, z=  8>, vel=<x=  0, y=  0, z=  0>
+;; pos=<x=  3, y=  5, z= -1>, vel=<x=  0, y=  0, z=  0>
+;;
+;; After 2770 steps:
+;; pos=<x=  2, y= -1, z=  1>, vel=<x= -3, y=  2, z=  2>
+;; pos=<x=  3, y= -7, z= -4>, vel=<x=  2, y= -5, z= -6>
+;; pos=<x=  1, y= -7, z=  5>, vel=<x=  0, y= -3, z=  6>
+;; pos=<x=  2, y=  2, z=  0>, vel=<x=  1, y=  6, z= -2>
+;;
+;; After 2771 steps:
+;; pos=<x= -1, y=  0, z=  2>, vel=<x= -3, y=  1, z=  1>
+;; pos=<x=  2, y=-10, z= -7>, vel=<x= -1, y= -3, z= -3>
+;; pos=<x=  4, y= -8, z=  8>, vel=<x=  3, y= -1, z=  3>
+;; pos=<x=  3, y=  5, z= -1>, vel=<x=  1, y=  3, z= -1>
+;;
+;; After 2772 steps:
+;; pos=<x= -1, y=  0, z=  2>, vel=<x=  0, y=  0, z=  0>
+;; pos=<x=  2, y=-10, z= -7>, vel=<x=  0, y=  0, z=  0>
+;; pos=<x=  4, y= -8, z=  8>, vel=<x=  0, y=  0, z=  0>
+;; pos=<x=  3, y=  5, z= -1>, vel=<x=  0, y=  0, z=  0>
+;; ```
+;;
+;; Of course, the universe might last for a very long time before
+;; repeating. Here's a copy of the second example from above:
+;;
+;; ```
+;; <x=-8, y=-10, z=0>
+;; <x=5, y=5, z=10>
+;; <x=2, y=-7, z=3>
+;; <x=9, y=-8, z=-3>
+;; ```
+;;
+;; This set of initial positions takes 4686774924 steps before it
+;; repeats a previous state! Clearly, you might need to find a more
+;; efficient way to simulate the universe.
+;;
+;; How many steps does it take to reach the first state that exactly
+;; matches a previous state?
+;;
+
+
+
+(defn find-period
+  [series]
+  (->> series
+     (map vector (range))
+     (rest)
+     (filter (fn [[_ v]] (= v (first series))))
+     (ffirst)))
+
+
+
+(defn divisible-by [n]
+  (fn [x]
+    (= 0 (rem x n))))
+
+
+
+(defn comp-preds-with-or [& predicates]
+  (fn [x]
+    (loop [preds predicates]
+      (cond
+        (not (seq preds))       false
+        ((first preds) x)       true
+        :else                   (recur (rest preds))))))
+
+
+
+(defn prime-numbers
+  ([] (prime-numbers (rest (rest (range))) []))
+  ([[n & numbers] predicates]
+   (let [preds (conj predicates (divisible-by n))
+         nums  (drop-while (apply comp-preds-with-or preds) numbers)]
+     (cons n (lazy-seq (prime-numbers nums preds))))))
+
+
+
+(defn factors
+  [n]
+  (loop [n n fs [] [p & ps :as primes] (prime-numbers)]
+    (if (= 1 n)
+      (frequencies fs)
+      (if ((divisible-by p) n)
+        (recur (quot n p) (conj fs p) primes)
+        (recur n fs ps)))))
+
+
+
+(defn hcf
+  [& ns]
+  (->> ns
+     (map factors)
+     (apply merge-with max)
+     (map (fn [[b p]] (reduce *' (repeat p b))))
+     (reduce *')))
+
+
+
+(defn moon-period
+  [moon-steps]
+  (let [px (find-period (->> (map (juxt :x :vx) moon-steps) (partition 13 1)))
+        py (find-period (->> (map (juxt :y :vy) moon-steps) (partition 13 1)))
+        pz (find-period (->> (map (juxt :z :vz) moon-steps) (partition 13 1)))]
+    (hcf px py pz)))
+
+
+
+(defn moons-period
+  [steps]
+  (->>
+   (for [i (range (count (first steps)))]
+     (->> (map #(nth % i) steps)
+        (moon-period)))
+   (apply hcf)))
+
+
+
+
+(fact
+ "compute moon's period"
+
+ (->> test-input
+    parse
+    (iterate step)
+    moons-period)
+ => 2772
+
+ )
+
+
+
+
+(fact
+ "compute moon's period"
+
+ (->> test-input2
+    parse
+    (iterate step)
+    moons-period)
+ => 4686774924
+
+ )
+
+
+
+
+(comment
+
+  (fact
+   "Solution: How many steps does it take to reach the first state that exactly matches a previous state?"
+
+   (->> input
+      parse
+      (iterate step)
+      moons-period)
+   => 282270365571288
+
+   ))
 
 
 ;;
